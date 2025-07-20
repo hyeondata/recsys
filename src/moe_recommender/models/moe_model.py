@@ -17,6 +17,17 @@ class MoEModel(nn.Module):
         u = self.user_emb(user_ids)
         i = self.item_emb(item_ids)
         x = torch.cat([u, i, movie_feats], dim=1)
-        gate_weights = self.gating(x)
-        expert_outs = torch.stack([expert(x).squeeze(1) for expert in self.experts], dim=1)
-        return torch.sum(gate_weights * expert_outs, dim=1)
+
+        gate_logits = self.gating(x)
+        expert_idx = torch.argmax(gate_logits, dim=1)  # [batch_size]
+
+        outputs = torch.zeros(x.size(0), device=x.device)
+
+        for idx, expert in enumerate(self.experts):
+            mask = (expert_idx == idx)
+            if mask.any():
+                x_selected = x[mask]
+                out = expert(x_selected).squeeze()
+                outputs[mask] = out
+
+        return outputs

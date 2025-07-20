@@ -66,8 +66,29 @@ def load_all_data(ratings_path, movies_path):
         movie_features.shape[1],
     )
 
-def get_loaders(train_ds, test_ds, batch_size=256):
-    num_workers = max(1, multiprocessing.cpu_count() // 2)
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    test_loader = DataLoader(test_ds, batch_size=batch_size, num_workers=num_workers)
+def get_loaders(train_ds, test_ds, batch_size=8192):
+    # 최적의 워커 수 계산 - 코어당 하나의 워커 권장
+    num_workers = max(4, multiprocessing.cpu_count() - 1)
+    
+    # 메모리와 성능 최적화를 위한 DataLoader 설정
+    train_loader = DataLoader(
+        train_ds, 
+        batch_size=batch_size,
+        shuffle=True, 
+        num_workers=num_workers,
+        pin_memory=True,  # 텐서를 CUDA 고정 메모리에 배치하여 호스트-GPU 전송 속도 향상
+        prefetch_factor=2,  # 미리 가져올 배치 수 설정
+        persistent_workers=True,  # 워커 프로세스 재사용하여 시작 비용 절감
+        drop_last=True  # 마지막 불완전한 배치 제거하여 일관된 배치 크기 보장
+    )
+    
+    test_loader = DataLoader(
+        test_ds, 
+        batch_size=batch_size,
+        shuffle=False,  # 테스트 데이터는 셔플 필요 없음
+        num_workers=num_workers,
+        pin_memory=True,
+        persistent_workers=True
+    )
+    
     return train_loader, test_loader
