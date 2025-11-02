@@ -109,52 +109,45 @@ def train_epoch(model, train_loader, optimizer, device, args):
     Returns:
         dict: 평균 손실 및 지표
     """
-    # 에피소드 수집
-    episode_data = collect_episode(model, train_loader, device, deterministic=False)
-
-    # 원본 보상 계산
-    raw_rewards = model.compute_rewards_from_errors(
-        episode_data['predictions'],
-        episode_data['targets']
-    )
-
-    # 그룹 상대 보상 계산 (정규화)
-    group_rewards = model.compute_group_relative_rewards(raw_rewards)
-
-    # GRPO 업데이트
     model.train()
-    dataset_size = len(episode_data['actions'])
-    indices = torch.randperm(dataset_size)
 
     total_loss_meter = AverageMeter()
     policy_loss_meter = AverageMeter()
     baseline_loss_meter = AverageMeter()
     rating_loss_meter = AverageMeter()
 
-    for grpo_epoch in tqdm(range(args.grpo_epochs), desc="GRPO epochs", leave=False):
-        num_batches = (dataset_size + args.batch_size - 1) // args.batch_size
-        for start_idx in tqdm(range(0, dataset_size, args.batch_size), desc=f"GRPO epoch {grpo_epoch+1}/{args.grpo_epochs}", leave=False, total=num_batches):
-            end_idx = min(start_idx + args.batch_size, dataset_size)
-            batch_indices = indices[start_idx:end_idx]
+    # 배치별로 학습 (Dense MoE와 동일한 방식)
+    for batch in tqdm(train_loader, desc="Training"):
+        user_id = batch['user_id'].to(device)
+        movie_id = batch['movie_id'].to(device)
+        age_group = batch['age_group'].to(device)
+        gender = batch['gender'].to(device)
+        occupation = batch['occupation'].to(device)
+        rating = batch['rating'].to(device)
 
-            # 배치 데이터 (에피소드에서 수집한 데이터 사용)
-            batch_user_id = episode_data['user_ids'][batch_indices]
-            batch_movie_id = episode_data['movie_ids'][batch_indices]
-            batch_age_group = episode_data['age_groups'][batch_indices]
-            batch_gender = episode_data['genders'][batch_indices]
-            batch_occupation = episode_data['occupations'][batch_indices]
+        batch_size = len(user_id)
 
-            batch_old_log_probs = episode_data['log_probs'][batch_indices]
-            batch_group_rewards = group_rewards[batch_indices]
-            batch_targets = episode_data['targets'][batch_indices]
+        # 1. 에피소드 수집 (현재 배치에 대해)
+        with torch.no_grad():
+            model.eval()
+            outputs_old = model(user_id, movie_id, age_group, gender, occupation, deterministic=False)
+            old_log_probs = outputs_old['log_prob']
+            predictions = outputs_old['rating']
 
+        # 2. 보상 계산
+        raw_rewards = model.compute_rewards_from_errors(predictions, rating)
+        group_rewards = model.compute_group_relative_rewards(raw_rewards)
+
+        # 3. GRPO 업데이트 (배치를 grpo_epochs번 반복 학습)
+        model.train()
+        for _ in range(args.grpo_epochs):
             # Forward
-            outputs = model(batch_user_id, batch_movie_id, batch_age_group, batch_gender, batch_occupation)
+            outputs = model(user_id, movie_id, age_group, gender, occupation)
 
             # Loss 계산
             losses = model.compute_loss(
-                outputs, batch_targets,
-                batch_old_log_probs, batch_group_rewards,
+                outputs, rating,
+                old_log_probs, group_rewards,
                 entropy_coef=args.entropy_coef,
                 baseline_coef=args.baseline_coef
             )
@@ -165,12 +158,11 @@ def train_epoch(model, train_loader, optimizer, device, args):
             torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
             optimizer.step()
 
-            # Metrics
-            batch_size = len(batch_indices)
-            total_loss_meter.update(losses['total_loss'].item(), batch_size)
-            policy_loss_meter.update(losses['policy_loss'].item(), batch_size)
-            baseline_loss_meter.update(losses['baseline_loss'].item(), batch_size)
-            rating_loss_meter.update(losses['rating_loss'].item(), batch_size)
+        # Metrics (마지막 업데이트 기준)
+        total_loss_meter.update(losses['total_loss'].item(), batch_size)
+        policy_loss_meter.update(losses['policy_loss'].item(), batch_size)
+        baseline_loss_meter.update(losses['baseline_loss'].item(), batch_size)
+        rating_loss_meter.update(losses['rating_loss'].item(), batch_size)
 
     return {
         'total_loss': total_loss_meter.avg,
@@ -192,16 +184,38 @@ def validate_epoch(model, val_loader, device):
     Returns:
         dict: 평가 지표
     """
-    # 결정론적으로 에피소드 수집
-    episode_data = collect_episode(model, val_loader, device, deterministic=True)
+    model.eval()
+
+    all_predictions = []
+    all_targets = []
+    all_actions = []
+
+    with torch.no_grad():
+        for batch in tqdm(val_loader, desc="Validation"):
+            user_id = batch['user_id'].to(device)
+            movie_id = batch['movie_id'].to(device)
+            age_group = batch['age_group'].to(device)
+            gender = batch['gender'].to(device)
+            occupation = batch['occupation'].to(device)
+            rating = batch['rating'].to(device)
+
+            # Forward (deterministic)
+            outputs = model(user_id, movie_id, age_group, gender, occupation, deterministic=True)
+
+            # Collect
+            all_predictions.append(outputs['rating'].cpu())
+            all_targets.append(rating.cpu())
+            all_actions.append(outputs['action'].cpu())
+
+    # Concatenate
+    predictions = torch.cat(all_predictions)
+    targets = torch.cat(all_targets)
+    actions = torch.cat(all_actions)
 
     # 메트릭 계산
-    predictions = episode_data['predictions']
-    targets = episode_data['targets']
     metrics = compute_all_metrics(predictions, targets, denormalize=True)
 
     # Expert 분포
-    actions = episode_data['actions']
     expert_dist = compute_expert_distribution(actions)
     print(f"Expert distribution: {expert_dist}")
 
@@ -246,17 +260,19 @@ def main(args):
         max_length=args.max_length
     )
 
-    # 데이터 로더
+    # 데이터 로더 (Dense MoE와 동일한 방식)
     train_loader = DataLoader(
         train_dataset,
-        batch_size=len(train_dataset),  # 전체 데이터를 한번에 로드
-        shuffle=False
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers
     )
 
     val_loader = DataLoader(
         val_dataset,
-        batch_size=len(val_dataset),
-        shuffle=False
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.num_workers
     )
 
     print(f"Train size: {len(train_dataset)}, Val size: {len(val_dataset)}")
@@ -357,6 +373,7 @@ if __name__ == "__main__":
 
     # Misc
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--num_workers", type=int, default=4, help="Number of workers")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints", help="Checkpoint directory")
 
     args = parser.parse_args()
