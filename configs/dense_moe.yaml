@@ -1,0 +1,33 @@
+# Dense MoE 실험 설정
+
+# Data
+data:
+  data_dir: "ml-100k"
+  train_rating_path: "ml-100k/u1.base"
+  val_rating_path: "ml-100k/u1.test"
+  max_length: 10
+
+# Model
+model:
+  embedding_dim: 64
+  num_experts: 8
+  expert_hidden_dim: 256
+  gating_hidden_dim: 128
+  dropout: 0.1
+
+# Training
+training:
+  batch_size: 256
+  epochs: 100
+  lr: 0.001
+  weight_decay: 0.00001
+  patience: 15
+
+# Misc
+misc:
+  seed: 42
+  num_workers: 4
+  checkpoint_dir: "checkpoints/dense_moe"
+
+# Description
+description: "Dense MoE baseline model with FC-based gating network"

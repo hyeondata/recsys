@@ -1,0 +1,43 @@
+# PPO-MoE 실험 설정
+
+# Data
+data:
+  data_dir: "ml-100k"
+  train_rating_path: "ml-100k/u1.base"
+  val_rating_path: "ml-100k/u1.test"
+  max_length: 10
+
+# Model
+model:
+  embedding_dim: 64
+  num_experts: 8
+  expert_hidden_dim: 256
+  policy_hidden_dim: 128
+  value_hidden_dim: 128
+  clip_epsilon: 0.2
+  dropout: 0.1
+
+# PPO Training
+ppo:
+  batch_size: 256
+  ppo_epochs: 4
+  gamma: 0.99
+  lam: 0.95
+  entropy_coef: 0.01
+  value_coef: 0.5
+  max_grad_norm: 0.5
+
+# Training
+training:
+  epochs: 100
+  lr: 0.0003
+  weight_decay: 0.00001
+  patience: 15
+
+# Misc
+misc:
+  seed: 42
+  checkpoint_dir: "checkpoints/ppo_moe"
+
+# Description
+description: "PPO-based reinforcement learning MoE model with policy and value networks"
