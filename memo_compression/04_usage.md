@@ -32,6 +32,18 @@ uv run python3 src/training/evaluate.py \
     --output_file results/evaluation.json
 ```
 
+## 시각화 (논문용)
+```bash
+# 성능 비교 (PDF 600 DPI)
+uv run python3 src/visualization/publication_plots.py \
+    --results_file results/all_models_evaluation.json \
+    --output_dir results/publication
+
+# 학습 곡선
+uv run python3 src/visualization/training_curves.py \
+    --output_dir results/publication
+```
+
 ## Git
 ```bash
 git init
