@@ -1,29 +1,31 @@
-# 사용법
+# 사용법 (간단 참조용)
 
-## 학습 (uv 사용 필수!)
+> ⚠️ **상세 사용법은 [`00_using.md`](./00_using.md) 참조**
+>
+> 이 파일은 간단한 참조용입니다. 전체 사용법, 파라미터 설명, 버전 히스토리는 00_using.md에서 확인하세요.
 
-### Dense MoE
+## Quick Commands
+
+### 학습 (uv 필수)
+
+**Dense MoE** (베이스라인)
 ```bash
-uv run python3 src/training/train_dense_moe.py \
-    --epochs 10 --batch_size 1024 --lr 0.001 \
-    --checkpoint_dir checkpoints/dense_moe
+uv run python3 src/training/train_dense_moe.py --epochs 10 --batch_size 1024
 ```
 
-### GRPO-MoE
+**PPO/GRPO (Batch)** (메모리 효율적)
 ```bash
-uv run python3 src/training/train_grpo_moe.py \
-    --epochs 10 --batch_size 256 --grpo_epochs 4 --lr 0.0003 \
-    --checkpoint_dir checkpoints/grpo_moe
+uv run python3 src/training/train_ppo_moe.py --epochs 10 --batch_size 256 --ppo_epochs 4
+uv run python3 src/training/train_grpo_moe.py --epochs 10 --batch_size 256 --grpo_epochs 4
 ```
 
-### PPO-MoE
+**PPO/GRPO (Standard)** (논문 재현용) ⭐
 ```bash
-uv run python3 src/training/train_ppo_moe.py \
-    --epochs 10 --batch_size 256 --ppo_epochs 4 --lr 0.0003 \
-    --checkpoint_dir checkpoints/ppo_moe
+uv run python3 src/training/train_ppo_moe_standard.py --epochs 10 --batch_size 512 --mini_batch_size 256 --ppo_epochs 4
+uv run python3 src/training/train_grpo_moe_standard.py --epochs 10 --batch_size 512 --mini_batch_size 256 --grpo_epochs 4
 ```
 
-## 평가
+### 평가
 ```bash
 uv run python3 src/training/evaluate.py \
     --dense_checkpoint checkpoints/dense_moe/dense_moe_best.pt \
@@ -32,30 +34,19 @@ uv run python3 src/training/evaluate.py \
     --output_file results/evaluation.json
 ```
 
-## 시각화 (논문용)
+### 시각화
 ```bash
-# 성능 비교 (PDF 600 DPI)
+# 기본 성능 비교
 uv run python3 src/visualization/publication_plots.py \
     --results_file results/all_models_evaluation.json \
     --output_dir results/publication
 
-# 학습 곡선
-uv run python3 src/visualization/training_curves.py \
+# 종합 지표 비교 (논문용) ⭐
+uv run python3 src/visualization/paper_metrics_comparison.py \
+    --results_file results/all_models_evaluation.json \
     --output_dir results/publication
 ```
 
-## Git
-```bash
-git init
-git remote add origin https://github.com/hyeondata/recsys.git
-git checkout -b moe
-git add .
-git commit -m "feat: MoE recommendation system"
-git push -u origin moe
-```
+---
 
-## 환경 설정
-- uv 패키지 관리자 사용
-- Python 3.8+
-- PyTorch 2.0+
-- CUDA 필수
+📖 **전체 문서**: [`00_using.md`](./00_using.md)

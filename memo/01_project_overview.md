@@ -23,11 +23,9 @@ claudeMoE/
 │       ├── train_dense_moe.py
 │       ├── train_ppo_moe.py
 │       ├── train_grpo_moe.py
+│       ├── train_ppo_moe_standard.py
+│       ├── train_grpo_moe_standard.py
 │       └── evaluate.py
-├── configs/         # 실험 설정 파일 (완료)
-│   ├── dense_moe.yaml
-│   ├── ppo_moe.yaml
-│   └── grpo_moe.yaml
 ├── memo/            # 프로젝트 문서
 │   ├── 01_project_overview.md
 │   ├── 02_dataset_analysis.md

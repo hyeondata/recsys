@@ -4,9 +4,9 @@
 
 ## 📁 파일 구성
 
-1. **publication_plots.py** - 논문용 고품질 시각화
-2. **training_curves.py** - 학습 곡선 시각화
-3. **compare_models.py** - 기존 시각화 도구 (일반용)
+1. **publication_plots.py** - 논문용 성능 비교 시각화
+2. **paper_metrics_comparison.py** - 종합 지표 비교 (확장성, 효율성, 성능)
+3. **training_curves.py** - 학습 곡선 시각화
 
 ## 🎨 Publication-Quality Plots
 
@@ -49,7 +49,21 @@ uv run python3 src/visualization/publication_plots.py \
 
 **출력**: `results/publication/` 폴더에 PDF와 PNG 파일 생성
 
-### 2. 학습 곡선 시각화
+### 2. 종합 지표 비교 (논문용) ⭐
+
+```bash
+# 확장성, 효율성, 성능 종합 비교
+uv run python3 src/visualization/paper_metrics_comparison.py \
+    --results_file results/all_models_evaluation.json \
+    --output_dir results/publication
+```
+
+**출력**:
+- `comprehensive_comparison.pdf/.png` - 4-panel 종합 비교
+- `performance_vs_efficiency.pdf/.png` - 성능-효율성 산점도
+- `comprehensive_table.tex` - LaTeX 테이블
+
+### 3. 학습 곡선 시각화
 
 ```bash
 # 더미 데이터로 실행 (데모)
@@ -64,14 +78,6 @@ uv run python3 src/visualization/training_curves.py \
 **출력**:
 - `training_curves.pdf/.png` - 4개 서브플롯 (Loss, RMSE, MAE, LR)
 - `convergence_comparison.pdf/.png` - 수렴 속도 비교
-
-### 3. 일반 시각화 (기존)
-
-```bash
-uv run python3 src/visualization/compare_models.py \
-    --results_file results/all_models_evaluation.json \
-    --output_dir results/visualizations
-```
 
 ## 📊 입력 데이터 형식
 

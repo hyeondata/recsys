@@ -26,16 +26,19 @@
 - `src/utils/metrics.py`: MSE, RMSE, MAE, Expert 분석
 - `src/utils/trainer_utils.py`: EarlyStopping, CheckpointManager, AverageMeter
 - `src/training/train_dense_moe.py`: Dense MoE 학습 스크립트
-- `src/training/train_ppo_moe.py`: PPO-MoE 학습 스크립트
-- `src/training/train_grpo_moe.py`: GRPO-MoE 학습 스크립트
+- `src/training/train_ppo_moe.py`: PPO-MoE 학습 (Batch 방식)
+- `src/training/train_grpo_moe.py`: GRPO-MoE 학습 (Batch 방식)
+- `src/training/train_ppo_moe_standard.py`: PPO-MoE 학습 (Standard RL)
+- `src/training/train_grpo_moe_standard.py`: GRPO-MoE 학습 (Standard RL)
 - `src/training/evaluate.py`: 통합 평가 스크립트
 
-#### 4. 실험 설정 및 문서 (100% 완료)
-- `configs/dense_moe.yaml`: Dense MoE 설정
-- `configs/ppo_moe.yaml`: PPO-MoE 설정
-- `configs/grpo_moe.yaml`: GRPO-MoE 설정
+#### 4. 시각화 및 문서 (100% 완료)
+- `src/visualization/publication_plots.py`: 논문용 성능 비교
+- `src/visualization/paper_metrics_comparison.py`: 종합 지표 비교
+- `src/visualization/training_curves.py`: 학습 곡선 시각화
 - `README.md`: 프로젝트 가이드
-- `memo/`: 5개의 상세 문서
+- `memo/`: 16개의 상세 문서
+- `memo_compression/`: 통합 사용법 문서
 
 ---
 

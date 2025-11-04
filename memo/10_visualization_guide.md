@@ -1,25 +1,55 @@
 # MoE 모델 비교 시각화 가이드
 
 ## 작성 일자
-2025년 11월 2일
+2025년 11월 4일 (v2.0 업데이트)
 
 ---
 
 ## 개요
 
-이 문서는 Dense MoE, PPO-MoE, GRPO-MoE 세 모델을 비교하는 시각화에 대한 가이드입니다.
+이 문서는 5가지 MoE 모델 (Dense, PPO Batch, GRPO Batch, PPO Standard, GRPO Standard)을 비교하는 시각화 도구들에 대한 가이드입니다.
 
 ---
 
-## 시각화 실행 방법
+## 시각화 도구 종류
 
-### 기본 사용법
+### 1. publication_plots.py - 논문용 성능 비교
 
 ```bash
-# uv를 사용하여 실행 (필수!)
-uv run python3 src/visualization/compare_models.py \
+uv run python3 src/visualization/publication_plots.py \
     --results_file results/all_models_evaluation.json \
-    --output_dir results/visualizations
+    --output_dir results/publication
+```
+
+**생성되는 파일**:
+- MSE, RMSE, MAE 개별 비교 그래프 (PDF/PNG)
+- 통합 성능 비교 그래프
+- Expert 분석 그래프
+- LaTeX 테이블
+
+### 2. paper_metrics_comparison.py - 종합 지표 비교 ⭐
+
+```bash
+uv run python3 src/visualization/paper_metrics_comparison.py \
+    --results_file results/all_models_evaluation.json \
+    --output_dir results/publication
+```
+
+**생성되는 파일**:
+- `comprehensive_comparison.pdf/.png` - 4-panel 종합 비교
+  - (a) Performance: MAE, RMSE
+  - (b) Scalability: Parameters
+  - (c) Training Efficiency: Time per epoch
+  - (d) Inference Efficiency: Inference time
+- `performance_vs_efficiency.pdf/.png` - 성능-효율성 산점도
+- `comprehensive_table.tex` - LaTeX 테이블
+
+### 3. training_curves.py - 학습 곡선
+
+```bash
+uv run python3 src/visualization/training_curves.py \
+    --training_logs_file results/training_history.json \
+    --output_dir results/publication
 ```
 
 ### 매개변수
@@ -27,7 +57,8 @@ uv run python3 src/visualization/compare_models.py \
 | 매개변수 | 설명 | 기본값 |
 |---------|------|--------|
 | `--results_file` | 평가 결과 JSON 파일 경로 | `results/all_models_evaluation.json` |
-| `--output_dir` | 시각화 출력 디렉토리 | `results/visualizations` |
+| `--output_dir` | 시각화 출력 디렉토리 | `results/publication` |
+| `--training_logs_file` | 학습 로그 JSON (선택) | - |
 
 ---
 
@@ -292,14 +323,20 @@ State → Policy Network (Categorical/T) → Select 1 Expert → Prediction
 
 ### 색상 변경
 ```python
-# src/visualization/compare_models.py 수정
-colors = ['#2E86AB', '#A23B72', '#F18F01']  # Dense, PPO, GRPO
+# src/visualization/paper_metrics_comparison.py의 setup_publication_style()
+return {
+    'dense': '#0173B2',    # Blue
+    'ppo': '#DE8F05',      # Orange
+    'grpo': '#029E73',     # Green
+    'ppo_std': '#CC79A7',  # Pink
+    'grpo_std': '#F0E442', # Yellow
+}
 ```
 
-### 메트릭 추가
+### DPI 조정
 ```python
-# performance_comparison 함수에 서브플롯 추가
-fig, axes = plt.subplots(1, 4, figsize=(20, 5))  # 4개로 변경
+# 더 높은 해상도
+'savefig.dpi': 1200  # 기본 600
 ```
 
 ### 스타일 변경
@@ -408,13 +445,18 @@ uv run python3 src/training/evaluate.py \
     --grpo_checkpoint checkpoints/grpo_moe/grpo_moe_best.pt \
     --output_file results/all_models_evaluation.json
 
-# 3. 시각화 생성
-uv run python3 src/visualization/compare_models.py \
+# 3. 시각화 생성 (논문용)
+uv run python3 src/visualization/publication_plots.py \
     --results_file results/all_models_evaluation.json \
-    --output_dir results/visualizations
+    --output_dir results/publication
 
-# 4. 결과 확인
-ls -lh results/visualizations/
+# 4. 종합 지표 비교 (논문용)
+uv run python3 src/visualization/paper_metrics_comparison.py \
+    --results_file results/all_models_evaluation.json \
+    --output_dir results/publication
+
+# 5. 결과 확인
+ls -lh results/publication/
 ```
 
 ---

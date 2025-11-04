@@ -20,14 +20,11 @@ src/
 ├── training/                       # 학습 스크립트
 │   ├── __init__.py
 │   ├── train_dense_moe.py         # Dense MoE 학습
-│   ├── train_ppo_moe.py           # PPO-MoE 학습
-│   ├── train_grpo_moe.py          # GRPO-MoE 학습
+│   ├── train_ppo_moe.py           # PPO-MoE 학습 (Batch)
+│   ├── train_grpo_moe.py          # GRPO-MoE 학습 (Batch)
+│   ├── train_ppo_moe_standard.py  # PPO-MoE 학습 (Standard RL)
+│   ├── train_grpo_moe_standard.py # GRPO-MoE 학습 (Standard RL)
 │   └── evaluate.py                 # 통합 평가
-
-configs/                            # 실험 설정
-├── dense_moe.yaml
-├── ppo_moe.yaml
-└── grpo_moe.yaml
 
 README.md                           # 프로젝트 문서
 ```
@@ -519,42 +516,22 @@ python src/training/evaluate.py \
 
 ---
 
-## 6. 실험 설정 파일 (`configs/`)
+## 6. 주요 하이퍼파라미터 비교
 
-### 파일 구조
+### 모델별 설정
 
-```yaml
-# Data
-data:
-  data_dir: "ml-100k"
-  train_rating_path: "ml-100k/u1.base"
-  val_rating_path: "ml-100k/u1.test"
+| 파라미터 | Dense | PPO (Batch) | GRPO (Batch) | PPO (Standard) | GRPO (Standard) |
+|----------|-------|-------------|--------------|----------------|-----------------|
+| **Learning Rate** | 0.001 | 0.0003 | 0.0003 | 0.0003 | 0.0003 |
+| **Batch Size** | 1024 | 256 | 256 | 512 | 512 |
+| **Mini Batch** | - | - | - | 256 | 256 |
+| **Gating Hidden** | 128 | - | - | - | - |
+| **Policy Hidden** | - | 128 | 128 | 128 | 128 |
+| **Value Hidden** | - | 128 | - | 128 | - |
+| **Update Epochs** | - | 4 | 4 | 4 | 4 |
+| **Temperature** | - | - | 1.0 | - | 1.0 |
 
-# Model
-model:
-  embedding_dim: 64
-  num_experts: 8
-  ...
-
-# Training
-training:
-  batch_size: 256
-  epochs: 100
-  lr: 0.001
-  ...
-```
-
-### 설정 파일 비교
-
-| 파라미터 | Dense | PPO | GRPO |
-|----------|-------|-----|------|
-| **Learning Rate** | 0.001 | 0.0003 | 0.0003 |
-| **Gating Hidden** | 128 | - | - |
-| **Policy Hidden** | - | 128 | 128 |
-| **Value Hidden** | - | 128 | - |
-| **PPO Epochs** | - | 4 | - |
-| **GRPO Epochs** | - | - | 4 |
-| **Temperature** | - | - | 1.0 |
+모든 설정은 CLI 인자로 제공되며 별도 설정 파일 없이 사용 가능합니다.
 
 ---
 
@@ -676,14 +653,15 @@ python src/training/evaluate.py \
 ## 파일 크기
 
 ```
-src/utils/metrics.py           4.2 KB
-src/utils/trainer_utils.py     5.8 KB
-src/training/train_dense_moe.py   8.1 KB
-src/training/train_ppo_moe.py    11.3 KB
-src/training/train_grpo_moe.py   10.8 KB
-src/training/evaluate.py        10.5 KB
-configs/                         ~1 KB (총)
-README.md                        5.2 KB
+src/utils/metrics.py                  4.2 KB
+src/utils/trainer_utils.py            5.8 KB
+src/training/train_dense_moe.py       8.1 KB
+src/training/train_ppo_moe.py        11.3 KB
+src/training/train_grpo_moe.py       10.8 KB
+src/training/train_ppo_moe_standard.py   12.5 KB
+src/training/train_grpo_moe_standard.py  12.2 KB
+src/training/evaluate.py             10.5 KB
+README.md                             5.2 KB
 ```
 
-**총 구현 코드: ~57 KB**
+**총 구현 코드: ~80 KB**

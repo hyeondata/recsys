@@ -90,9 +90,10 @@ logs/
 
 **포함된 항목들**:
 - 소스 코드 (src/)
-- 설정 파일 (configs/)
-- 문서 (memo/, README.md)
-- 요구사항 (requirements.txt)
+- 문서 (memo/, memo_compression/, README.md)
+- 의존성 관리 (pyproject.toml, uv.lock)
+
+> ⚠️ **참고**: v2.0부터 configs/ 디렉토리는 제거되었습니다 (모든 설정은 CLI 인자로 제공)
 
 ### 3. Git 사용자 설정
 
@@ -145,14 +146,18 @@ git add .
 git status
 ```
 
-**스테이징된 파일 목록** (총 40개 파일):
+**스테이징된 파일 목록** (v1.0 초기 커밋):
+
+> ⚠️ **참고**: 아래 목록은 v1.0 초기 커밋 내용입니다. v2.0에서 일부 파일이 제거되거나 추가되었습니다.
+> - **제거됨**: configs/, test_data_loading.py, compare_models.py
+> - **추가됨**: train_ppo_moe_standard.py, train_grpo_moe_standard.py, paper_metrics_comparison.py, memo_compression/
 
 ```
 새 파일:       .gitignore
 새 파일:       README.md
-새 파일:       configs/dense_moe.yaml
-새 파일:       configs/grpo_moe.yaml
-새 파일:       configs/ppo_moe.yaml
+새 파일:       configs/dense_moe.yaml (v2.0에서 제거됨)
+새 파일:       configs/grpo_moe.yaml (v2.0에서 제거됨)
+새 파일:       configs/ppo_moe.yaml (v2.0에서 제거됨)
 새 파일:       memo/01_project_overview.md
 새 파일:       memo/02_dataset_analysis.md
 새 파일:       memo/03_code_structure.md
@@ -186,9 +191,18 @@ git status
 새 파일:       src/utils/__init__.py
 새 파일:       src/utils/metrics.py
 새 파일:       src/utils/trainer_utils.py
-새 파일:       src/visualization/compare_models.py
-새 파일:       test_data_loading.py
+새 파일:       src/visualization/compare_models.py (v2.0에서 제거됨)
+새 파일:       test_data_loading.py (v2.0에서 제거됨)
 ```
+
+**v2.0에서 추가된 파일들**:
+- src/training/train_ppo_moe_standard.py
+- src/training/train_grpo_moe_standard.py
+- src/visualization/paper_metrics_comparison.py
+- memo/14_batch_loading_fix.md
+- memo/15_publication_visualization.md
+- memo/16_standard_rl_implementation.md
+- memo_compression/ (전체 폴더)
 
 ### 7. 커밋 생성
 
@@ -277,12 +291,13 @@ src/
 └── visualization/  # 시각화
 ```
 
-### 2. 설정 파일
+### 2. 시각화 도구
 ```
-configs/
-├── dense_moe.yaml
-├── ppo_moe.yaml
-└── grpo_moe.yaml
+src/visualization/
+├── publication_plots.py
+├── paper_metrics_comparison.py
+├── training_curves.py
+└── README.md
 ```
 
 ### 3. 문서
