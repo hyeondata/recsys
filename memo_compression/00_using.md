@@ -1,7 +1,7 @@
 # MoE 영화 추천 시스템 - 사용법 통합 가이드
 
-**최종 업데이트**: 2025-11-04
-**버전**: v2.0 (표준 RL 구현 추가)
+**최종 업데이트**: 2025-11-09
+**버전**: v2.2 (확장성 실험 추가)
 
 ---
 
@@ -9,10 +9,12 @@
 1. [환경 설정](#환경-설정)
 2. [데이터 준비](#데이터-준비)
 3. [모델 학습](#모델-학습)
-4. [모델 평가](#모델-평가)
-5. [시각화](#시각화)
-6. [Git 관리](#git-관리)
-7. [버전 히스토리](#버전-히스토리)
+4. [Resume 기능 (중단된 학습 이어하기)](#resume-기능)
+5. [모델 평가](#모델-평가)
+6. [시각화](#시각화)
+7. [확장성 실험](#확장성-실험-scalability-experiments--새로운-기능-v22)
+8. [Git 관리](#git-관리)
+9. [버전 히스토리](#버전-히스토리)
 
 ---
 
@@ -199,6 +201,105 @@ uv run python3 src/training/train_grpo_moe_standard.py \
 
 ---
 
+## 🔄 Resume 기능
+
+### 중단된 학습 이어서 하기 ⭐ 새로운 기능 (v2.1)
+
+학습 중 예기치 않은 중단(GPU 크래시, 시스템 종료 등)이 발생해도 이어서 학습 가능!
+
+### 기본 사용법
+
+```bash
+# 일반 학습 (처음부터)
+uv run python3 src/training/train_ppo_moe.py --epochs 100 --batch_size 256
+
+# 중단된 학습 이어하기 (--resume 플래그만 추가)
+uv run python3 src/training/train_ppo_moe.py --epochs 100 --batch_size 256 --resume
+```
+
+### 자동 저장되는 체크포인트
+
+매 epoch마다 3가지 체크포인트가 자동 저장됨:
+- `{model}_epoch_{N}.pt` - 일반 체크포인트 (최근 3개 유지)
+- `{model}_best.pt` - 최고 성능 모델
+- `{model}_latest.pt` - **Resume용 최신 체크포인트**
+
+### 복원되는 정보
+
+- ✅ 모델 가중치 (완전 복원)
+- ✅ Optimizer 상태 (학습률, momentum 등)
+- ✅ Scheduler 상태 (Dense MoE만)
+- ✅ Early Stopping 상태 (counter, best score)
+- ✅ 현재 Epoch 번호
+- ✅ Best validation metric
+
+### 사용 예시
+
+```bash
+# 학습 시작
+uv run python3 src/training/train_ppo_moe.py --epochs 100 --batch_size 256
+# ... Epoch 45/100 학습 중 GPU 크래시 발생
+
+# 시스템 재시작 후 이어서 학습
+uv run python3 src/training/train_ppo_moe.py --epochs 100 --batch_size 256 --resume
+# ✅ Epoch 46부터 자동으로 이어서 학습!
+
+# 출력 예시:
+# ==================================================
+# Resumed from epoch 45
+# Best validation RMSE: 1.0452
+# ==================================================
+# Epoch 46/100
+# ...
+```
+
+### 모든 모델 지원
+
+```bash
+# Dense MoE
+uv run python3 src/training/train_dense_moe.py --epochs 50 --resume
+
+# PPO-MoE
+uv run python3 src/training/train_ppo_moe.py --epochs 50 --resume
+
+# GRPO-MoE
+uv run python3 src/training/train_grpo_moe.py --epochs 50 --resume
+
+# PPO-MoE Standard
+uv run python3 src/training/train_ppo_moe_standard.py --epochs 50 --resume
+
+# GRPO-MoE Standard
+uv run python3 src/training/train_grpo_moe_standard.py --epochs 50 --resume
+```
+
+### ⚠️ 주의사항
+
+1. **하이퍼파라미터 일치**: Resume 시 원래와 동일한 파라미터 사용 권장
+   ```bash
+   # ❌ 잘못된 사용
+   # 원래: --batch_size 256
+   # Resume: --batch_size 512  (권장하지 않음)
+
+   # ✅ 올바른 사용
+   # 원래: --batch_size 256
+   # Resume: --batch_size 256  (동일하게 유지)
+   ```
+
+2. **Checkpoint 경로**: `--checkpoint_dir`을 사용했다면 resume 시에도 동일하게 지정
+   ```bash
+   uv run python3 src/training/train_ppo_moe.py \
+       --checkpoint_dir checkpoints/experiment_1 \
+       --resume
+   ```
+
+3. **자동 처음부터 시작**: latest.pt 파일이 없으면 자동으로 처음부터 학습
+
+### 상세 문서
+
+- `memo/17_resume_training_feature.md` - Resume 기능 상세 설명
+
+---
+
 ## 📈 모델 평가
 
 ### 단일 모델 평가
@@ -309,6 +410,60 @@ uv run python3 src/visualization/training_curves.py \
 
 ---
 
+## 🔬 확장성 실험 (Scalability Experiments) ⭐ 새로운 기능 (v2.2)
+
+### Expert 개수를 늘려서 확장성 비교
+
+**목적**: Dense MoE vs RL MoE의 확장성 차이를 정량적으로 측정
+
+**핵심 차이**:
+- Dense MoE: 모든 Expert 사용 → Expert 늘어나면 느려짐 (O(n))
+- RL MoE: 하나만 선택 → Expert 늘어나도 속도 일정 (O(1))
+
+### 빠른 테스트 (5분)
+```bash
+chmod +x experiments/quick_test.sh
+./experiments/quick_test.sh
+```
+
+### 전체 실험 (1-2시간)
+```bash
+chmod +x experiments/run_scalability_experiment.sh
+./experiments/run_scalability_experiment.sh
+```
+
+### 커스터마이징
+```bash
+uv run python3 experiments/scalability_experiment.py \
+    --models dense ppo grpo \
+    --num_experts_list 4 8 16 32 64 \
+    --num_epochs 5 \
+    --experiment_id my_exp
+```
+
+### 측정 지표
+- **학습 시간**: Expert 개수에 따른 학습 시간
+- **추론 시간**: Expert 개수에 따른 추론 시간
+- **메모리 사용량**: GPU 메모리
+- **성능**: RMSE, MAE
+- **효율성**: 1 / (RMSE × Time)
+
+### 결과 확인
+```bash
+# 시각화 그래프
+ls experiments/visualizations/{실험ID}/*.png
+
+# 수치 테이블
+cat experiments/visualizations/{실험ID}/scalability_comparison_table.md
+```
+
+### 상세 가이드
+- **빠른 시작**: `experiments/QUICKSTART.md`
+- **상세 가이드**: `experiments/README_SCALABILITY.md`
+- **메모**: `memo/18_scalability_experiments.md`
+
+---
+
 ## 🔄 Git 관리
 
 ### 초기 설정
@@ -335,6 +490,23 @@ git push -u origin moe
 ---
 
 ## 📝 버전 히스토리
+
+### v2.2 (2025-11-09) - 확장성 실험
+- ✅ Expert 개수 확장성 실험 시스템 (`experiments/scalability_experiment.py`)
+- ✅ 학습/추론 시간, 메모리 자동 측정
+- ✅ 시각화 자동 생성 (`experiments/visualize_scalability.py`)
+- ✅ Dense MoE vs RL MoE 확장성 비교
+- ✅ 빠른 테스트 스크립트 (`quick_test.sh`)
+- 📄 메모: memo/18_scalability_experiments.md
+- 📄 가이드: experiments/README_SCALABILITY.md
+
+### v2.1 (2025-11-08) - Resume 기능
+- ✅ Resume 기능 추가 (중단된 학습 이어하기)
+- ✅ 매 epoch마다 `_latest.pt` 자동 저장
+- ✅ Optimizer, Scheduler, Early Stopping 상태 복원
+- ✅ 모든 학습 스크립트에 `--resume` 플래그 추가
+- ✅ `CheckpointManager` 개선
+- 📄 메모: memo/17_resume_training_feature.md
 
 ### v2.0 (2025-11-04) - 표준 RL 구현
 - ✅ `train_ppo_moe_standard.py` 추가

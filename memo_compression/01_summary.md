@@ -1,5 +1,8 @@
 # 프로젝트 요약
 
+**최종 업데이트**: 2025-11-09
+**버전**: v2.2
+
 ## 목표
 MovieLens 100k 기반 MoE 영화 추천 시스템 구현 및 비교
 
@@ -21,9 +24,12 @@ src/
 ├── training/          # 학습 스크립트
 ├── utils/             # 메트릭, Trainer 유틸
 └── visualization/     # 논문용 시각화
-    ├── publication_plots.py    # 성능 비교 (PDF 600 DPI)
-    ├── training_curves.py      # 학습 곡선
-    └── README.md               # 사용 가이드
+
+experiments/
+├── scalability_experiment.py      # 확장성 실험 ⭐ 신규
+├── visualize_scalability.py       # 확장성 시각화 ⭐ 신규
+├── run_scalability_experiment.sh  # 실행 스크립트
+└── quick_test.sh                  # 빠른 테스트
 ```
 
 ## 주요 수정사항
@@ -35,3 +41,13 @@ src/
    - IEEE/ACM 기준 충족 (600 DPI PDF)
    - Colorblind-friendly 색상
    - LaTeX 통합 지원
+4. **Resume 기능 추가 (17_resume_training_feature.md)**
+   - 중단된 학습 이어서 하기 (`--resume` 플래그)
+   - 매 epoch마다 `_latest.pt` 자동 저장
+   - Optimizer, Scheduler, Early Stopping 상태 완전 복원
+   - 모든 학습 스크립트 지원
+5. **확장성 실험 시스템 (18_scalability_experiments.md)** ⭐ 최신
+   - Expert 개수 증가에 따른 성능 비교 (4, 8, 16, 32, 64)
+   - 학습/추론 시간, 메모리 자동 측정
+   - Dense MoE vs RL MoE 확장성 차이 정량화
+   - 시각화 자동 생성 (600 DPI)
