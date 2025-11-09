@@ -1,7 +1,7 @@
 # 프로젝트 요약
 
 **최종 업데이트**: 2025-11-09
-**버전**: v2.2
+**버전**: v2.3
 
 ## 목표
 MovieLens 100k 기반 MoE 영화 추천 시스템 구현 및 비교
@@ -46,8 +46,13 @@ experiments/
    - 매 epoch마다 `_latest.pt` 자동 저장
    - Optimizer, Scheduler, Early Stopping 상태 완전 복원
    - 모든 학습 스크립트 지원
-5. **확장성 실험 시스템 (18_scalability_experiments.md)** ⭐ 최신
+5. **확장성 실험 시스템 (18_scalability_experiments.md)**
    - Expert 개수 증가에 따른 성능 비교 (4, 8, 16, 32, 64)
+6. **벡터화 최적화 (19_vectorization_optimization.md)** ⭐ 최신
+   - Expert 실행 방식 벡터화로 학습 속도 **10-50배 향상**
+   - src: 47초 → 2-3초/배치 (15-20배)
+   - src_10m: 10-15초 → 0.2-0.3초/배치 (30-50배)
+   - _standard.py 파일 제거 (배치 방식으로 통일)
    - 학습/추론 시간, 메모리 자동 측정
    - Dense MoE vs RL MoE 확장성 차이 정량화
    - 시각화 자동 생성 (600 DPI)

@@ -1,5 +1,5 @@
 """
-PPO-MoE 학습 스크립트
+PPO-MoE 학습 스크립트 (ml-20m 버전)
 PPO(Proximal Policy Optimization) 강화학습 기반
 """
 
@@ -13,11 +13,10 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import argparse
 
-from src.models import PPOMoE
-from src.data.movie_preprocessor import MoviePreprocessor
-from src.data.user_preprocessor import UserPreprocessor
-from src.data.enhanced_dataset import EnhancedMovieRatingDataset
-from src.utils import (
+from src_20m.models import PPOMoE
+from src_20m.data.movie_preprocessor import MoviePreprocessor
+from src_20m.data.dataset import MovieRatingDataset, load_and_split_ratings
+from src_20m.utils import (
     compute_all_metrics,
     compute_expert_distribution,
     compute_expert_performance,
@@ -29,77 +28,6 @@ from src.utils import (
     AverageMeter,
     print_metrics
 )
-
-
-def collect_episode(model, data_loader, device, deterministic=False):
-    """
-    에피소드 데이터 수집
-
-    Args:
-        model: PPOMoE 모델
-        data_loader: 데이터 로더
-        device: 디바이스
-        deterministic: 결정론적 선택 여부
-
-    Returns:
-        dict: 수집된 에피소드 데이터
-    """
-    model.eval()
-
-    states = []
-    actions = []
-    log_probs = []
-    values = []
-    rewards = []
-    predictions = []
-    targets = []
-    user_ids = []
-    movie_ids = []
-    age_groups = []
-    genders = []
-    occupations = []
-
-    with torch.no_grad():
-        for batch in tqdm(data_loader, desc="Collecting episodes", leave=False):
-            user_id = batch['user_id'].to(device)
-            movie_id = batch['movie_id'].to(device)
-            age_group = batch['age_group'].to(device)
-            gender = batch['gender'].to(device)
-            occupation = batch['occupation'].to(device)
-            rating = batch['rating'].to(device)
-
-            # Forward
-            outputs = model(user_id, movie_id, age_group, gender, occupation, deterministic=deterministic)
-
-            # 보상 계산: -|predicted - actual|
-            reward = -torch.abs(outputs['rating'] - rating)
-
-            # 수집
-            actions.append(outputs['action'])
-            log_probs.append(outputs['log_prob'])
-            values.append(outputs['value'])
-            rewards.append(reward)
-            predictions.append(outputs['rating'])
-            targets.append(rating)
-            user_ids.append(user_id)
-            movie_ids.append(movie_id)
-            age_groups.append(age_group)
-            genders.append(gender)
-            occupations.append(occupation)
-
-    return {
-        'actions': torch.cat(actions),
-        'log_probs': torch.cat(log_probs),
-        'values': torch.cat(values),
-        'rewards': torch.cat(rewards),
-        'predictions': torch.cat(predictions),
-        'targets': torch.cat(targets),
-        'user_ids': torch.cat(user_ids),
-        'movie_ids': torch.cat(movie_ids),
-        'age_groups': torch.cat(age_groups),
-        'genders': torch.cat(genders),
-        'occupations': torch.cat(occupations)
-    }
 
 
 def train_epoch(model, train_loader, optimizer, device, args):
@@ -123,13 +51,10 @@ def train_epoch(model, train_loader, optimizer, device, args):
     value_loss_meter = AverageMeter()
     rating_loss_meter = AverageMeter()
 
-    # 배치별로 학습 (Dense MoE와 동일한 방식)
+    # 배치별로 학습
     for batch in tqdm(train_loader, desc="Training"):
         user_id = batch['user_id'].to(device)
         movie_id = batch['movie_id'].to(device)
-        age_group = batch['age_group'].to(device)
-        gender = batch['gender'].to(device)
-        occupation = batch['occupation'].to(device)
         rating = batch['rating'].to(device)
 
         batch_size = len(user_id)
@@ -137,7 +62,7 @@ def train_epoch(model, train_loader, optimizer, device, args):
         # 1. 에피소드 수집 (현재 배치에 대해)
         with torch.no_grad():
             model.eval()
-            outputs_old = model(user_id, movie_id, age_group, gender, occupation, deterministic=False)
+            outputs_old = model(user_id, movie_id, deterministic=False)
             old_log_probs = outputs_old['log_prob']
             old_values = outputs_old['value']
             predictions = outputs_old['rating']
@@ -157,7 +82,7 @@ def train_epoch(model, train_loader, optimizer, device, args):
         model.train()
         for _ in range(args.ppo_epochs):
             # Forward
-            outputs = model(user_id, movie_id, age_group, gender, occupation)
+            outputs = model(user_id, movie_id)
 
             # Loss 계산
             losses = model.compute_loss(
@@ -187,7 +112,7 @@ def train_epoch(model, train_loader, optimizer, device, args):
     }
 
 
-def validate_epoch(model, val_loader, device):
+def validate_epoch(model, val_loader, device, num_experts=16):
     """
     검증
 
@@ -195,6 +120,7 @@ def validate_epoch(model, val_loader, device):
         model: PPOMoE 모델
         val_loader: 검증 데이터 로더
         device: 디바이스
+        num_experts: Expert 개수
 
     Returns:
         dict: 평가 지표
@@ -209,13 +135,10 @@ def validate_epoch(model, val_loader, device):
         for batch in tqdm(val_loader, desc="Validation"):
             user_id = batch['user_id'].to(device)
             movie_id = batch['movie_id'].to(device)
-            age_group = batch['age_group'].to(device)
-            gender = batch['gender'].to(device)
-            occupation = batch['occupation'].to(device)
             rating = batch['rating'].to(device)
 
             # Forward (deterministic)
-            outputs = model(user_id, movie_id, age_group, gender, occupation, deterministic=True)
+            outputs = model(user_id, movie_id, deterministic=True)
 
             # Collect
             all_predictions.append(outputs['rating'].cpu())
@@ -228,15 +151,15 @@ def validate_epoch(model, val_loader, device):
     actions = torch.cat(all_actions)
 
     # 메트릭 계산
-    metrics = compute_all_metrics(predictions, targets, denormalize=True)
+    metrics = compute_all_metrics(predictions, targets, denormalize=False)
 
     # Expert 분포
-    expert_dist = compute_expert_distribution(actions)
+    expert_dist = compute_expert_distribution(actions, num_experts=num_experts)
     print(f"Expert distribution: {expert_dist}")
 
     # Expert 성능
     errors = torch.abs(predictions - targets)
-    expert_perf = compute_expert_performance(actions, errors, num_experts=8)
+    expert_perf = compute_expert_performance(actions, errors, num_experts=num_experts)
     print(f"Expert performance (avg error): {expert_perf}")
 
     return metrics
@@ -251,31 +174,35 @@ def main(args):
     print(f"Using device: {device}")
 
     # 데이터 전처리
-    print("Loading and preprocessing data...")
+    print("\nLoading and preprocessing data (ml-20m)...")
     movie_preprocessor = MoviePreprocessor(args.data_dir)
     movie_df, vocab, encoded_titles = movie_preprocessor.process_movie_data()
 
-    user_preprocessor = UserPreprocessor(args.data_dir)
-    user_df, user_metadata = user_preprocessor.process_user_data()
+    # Train/Test split
+    print("\nSplitting data...")
+    train_ratings, val_ratings = load_and_split_ratings(
+        args.data_dir,
+        train_ratio=0.8,
+        random_seed=args.seed
+    )
 
     # 데이터셋 생성
-    train_dataset = EnhancedMovieRatingDataset(
+    print("\nCreating datasets...")
+    train_dataset = MovieRatingDataset(
         movie_data=movie_df,
-        user_data=user_df,
-        rating_path=args.train_rating_path,
+        rating_data=train_ratings,
         vocab=vocab,
         max_length=args.max_length
     )
 
-    val_dataset = EnhancedMovieRatingDataset(
+    val_dataset = MovieRatingDataset(
         movie_data=movie_df,
-        user_data=user_df,
-        rating_path=args.val_rating_path,
+        rating_data=val_ratings,
         vocab=vocab,
         max_length=args.max_length
     )
 
-    # 데이터 로더 (Dense MoE와 동일한 방식)
+    # 데이터 로더
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
@@ -290,14 +217,14 @@ def main(args):
         num_workers=args.num_workers
     )
 
-    print(f"Train size: {len(train_dataset)}, Val size: {len(val_dataset)}")
+    # 모델 초기화
+    print("\nInitializing model...")
+    num_users = train_ratings['userId'].max()
+    num_movies = movie_df['movieId'].max()
 
-    # 모델 생성
     model = PPOMoE(
-        num_users=user_metadata['num_users'],
-        num_movies=len(movie_df),
-        num_age_groups=user_metadata['num_age_groups'],
-        num_occupations=user_metadata['num_occupations'],
+        num_users=num_users,
+        num_movies=num_movies,
         embedding_dim=args.embedding_dim,
         num_experts=args.num_experts,
         expert_hidden_dim=args.expert_hidden_dim,
@@ -308,56 +235,34 @@ def main(args):
     ).to(device)
 
     print(f"Model parameters: {count_parameters(model):,}")
+    print(f"Users: {num_users:,}, Movies: {num_movies:,}")
 
     # Optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     # Early stopping & Checkpoint
-    early_stopping = EarlyStopping(patience=args.patience, min_delta=0.001, mode='min')
+    early_stopping = EarlyStopping(patience=args.patience)
     checkpoint_manager = CheckpointManager(
         checkpoint_dir=args.checkpoint_dir,
         model_name="ppo_moe",
         max_keep=3
     )
 
-    # Resume 기능
-    start_epoch = 1
+    # 학습 루프
     best_val_rmse = float('inf')
 
-    if args.resume:
-        try:
-            checkpoint_info = checkpoint_manager.load_checkpoint(
-                model=model,
-                optimizer=optimizer,
-                resume=True
-            )
-            start_epoch = checkpoint_info['epoch'] + 1
-            best_val_rmse = checkpoint_info.get('best_val_rmse', checkpoint_info['metrics'].get('rmse', float('inf')))
-
-            # Early stopping state 복원
-            if 'early_stopping_state' in checkpoint_info:
-                early_stopping.load_state_dict(checkpoint_info['early_stopping_state'])
-
-            print(f"\n{'='*50}")
-            print(f"Resumed from epoch {checkpoint_info['epoch']}")
-            print(f"Best validation RMSE: {best_val_rmse:.4f}")
-            print(f"{'='*50}\n")
-        except FileNotFoundError as e:
-            print(f"Warning: {e}")
-            print("Starting training from scratch...")
-
-    # 학습 루프
-    for epoch in range(start_epoch, args.epochs + 1):
-        print(f"\n{'='*50}")
+    print(f"\nStarting training for {args.epochs} epochs...")
+    for epoch in range(1, args.epochs + 1):
+        print(f"\n{'='*60}")
         print(f"Epoch {epoch}/{args.epochs}")
-        print(f"{'='*50}")
+        print(f"{'='*60}")
 
         # Train
         train_metrics = train_epoch(model, train_loader, optimizer, device, args)
         print_metrics(train_metrics, prefix="Train")
 
         # Validate
-        val_metrics = validate_epoch(model, val_loader, device)
+        val_metrics = validate_epoch(model, val_loader, device, num_experts=args.num_experts)
         print_metrics(val_metrics, prefix="Val")
 
         # Checkpoint
@@ -366,13 +271,7 @@ def main(args):
             best_val_rmse = val_metrics['rmse']
 
         checkpoint_manager.save_checkpoint(
-            model=model,
-            optimizer=optimizer,
-            epoch=epoch,
-            metrics=val_metrics,
-            is_best=is_best,
-            early_stopping_state=early_stopping.state_dict(),
-            best_val_rmse=best_val_rmse
+            model, optimizer, epoch, val_metrics, is_best=is_best
         )
 
         # Early stopping
@@ -386,25 +285,23 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train PPO-MoE model")
+    parser = argparse.ArgumentParser(description="Train PPO-MoE model (ml-20m)")
 
     # Data
-    parser.add_argument("--data_dir", type=str, default="ml-100k", help="Data directory")
-    parser.add_argument("--train_rating_path", type=str, default="ml-100k/u1.base", help="Training rating file")
-    parser.add_argument("--val_rating_path", type=str, default="ml-100k/u1.test", help="Validation rating file")
+    parser.add_argument("--data_dir", type=str, default="ml-20m", help="Data directory")
     parser.add_argument("--max_length", type=int, default=10, help="Max title length")
 
     # Model
-    parser.add_argument("--embedding_dim", type=int, default=64, help="Embedding dimension")
-    parser.add_argument("--num_experts", type=int, default=8, help="Number of experts")
-    parser.add_argument("--expert_hidden_dim", type=int, default=256, help="Expert hidden dimension")
+    parser.add_argument("--embedding_dim", type=int, default=128, help="Embedding dimension")
+    parser.add_argument("--num_experts", type=int, default=16, help="Number of experts")
+    parser.add_argument("--expert_hidden_dim", type=int, default=512, help="Expert hidden dimension")
     parser.add_argument("--policy_hidden_dim", type=int, default=128, help="Policy hidden dimension")
     parser.add_argument("--value_hidden_dim", type=int, default=128, help="Value hidden dimension")
     parser.add_argument("--clip_epsilon", type=float, default=0.2, help="PPO clip epsilon")
-    parser.add_argument("--dropout", type=float, default=0.1, help="Dropout rate")
+    parser.add_argument("--dropout", type=float, default=0.2, help="Dropout rate")
 
     # PPO Training
-    parser.add_argument("--batch_size", type=int, default=256, help="Batch size for PPO updates")
+    parser.add_argument("--batch_size", type=int, default=1024, help="Batch size for PPO updates")
     parser.add_argument("--ppo_epochs", type=int, default=4, help="PPO update epochs per iteration")
     parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
     parser.add_argument("--lam", type=float, default=0.95, help="GAE lambda")
@@ -413,16 +310,15 @@ if __name__ == "__main__":
     parser.add_argument("--max_grad_norm", type=float, default=0.5, help="Max gradient norm")
 
     # Training
-    parser.add_argument("--epochs", type=int, default=100, help="Number of epochs")
+    parser.add_argument("--epochs", type=int, default=20, help="Number of epochs")
     parser.add_argument("--lr", type=float, default=0.0003, help="Learning rate")
     parser.add_argument("--weight_decay", type=float, default=1e-5, help="Weight decay")
-    parser.add_argument("--patience", type=int, default=15, help="Early stopping patience")
+    parser.add_argument("--patience", type=int, default=10, help="Early stopping patience")
 
     # Misc
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--num_workers", type=int, default=4, help="Number of workers")
-    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints", help="Checkpoint directory")
-    parser.add_argument("--resume", action="store_true", help="Resume training from latest checkpoint")
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints_20m/ppo_moe", help="Checkpoint directory")
 
     args = parser.parse_args()
     main(args)

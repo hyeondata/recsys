@@ -54,20 +54,6 @@ class EarlyStopping:
                 self.early_stop = True
             return False
 
-    def state_dict(self):
-        """Early stopping 상태 반환"""
-        return {
-            'counter': self.counter,
-            'best_score': self.best_score,
-            'early_stop': self.early_stop
-        }
-
-    def load_state_dict(self, state_dict):
-        """Early stopping 상태 로드"""
-        self.counter = state_dict['counter']
-        self.best_score = state_dict['best_score']
-        self.early_stop = state_dict['early_stop']
-
 
 class CheckpointManager:
     """
@@ -85,7 +71,7 @@ class CheckpointManager:
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         self.saved_checkpoints = []
 
-    def save_checkpoint(self, model, optimizer, epoch, metrics, is_best=False, scheduler=None, **kwargs):
+    def save_checkpoint(self, model, optimizer, epoch, metrics, is_best=False):
         """
         체크포인트 저장
 
@@ -95,8 +81,6 @@ class CheckpointManager:
             epoch (int): 현재 epoch
             metrics (dict): 평가 지표들
             is_best (bool): 최고 성능 모델인지 여부
-            scheduler: Learning rate scheduler (선택)
-            **kwargs: 추가 저장할 정보 (예: early_stopping state)
         """
         checkpoint = {
             'epoch': epoch,
@@ -104,13 +88,6 @@ class CheckpointManager:
             'optimizer_state_dict': optimizer.state_dict(),
             'metrics': metrics
         }
-
-        # Scheduler state 저장
-        if scheduler is not None:
-            checkpoint['scheduler_state_dict'] = scheduler.state_dict()
-
-        # 추가 정보 저장 (예: early_stopping counter)
-        checkpoint.update(kwargs)
 
         # 일반 체크포인트 저장
         filename = f"{self.model_name}_epoch_{epoch}.pt"
@@ -125,67 +102,43 @@ class CheckpointManager:
             torch.save(checkpoint, best_filepath)
             print(f"Saved best model to {best_filepath}")
 
-        # 최근 체크포인트 저장 (resume용)
-        latest_filename = f"{self.model_name}_latest.pt"
-        latest_filepath = self.checkpoint_dir / latest_filename
-        torch.save(checkpoint, latest_filepath)
-
         # 오래된 체크포인트 삭제 (max_keep 초과 시)
         if self.max_keep > 0 and len(self.saved_checkpoints) > self.max_keep:
             old_checkpoint = self.saved_checkpoints.pop(0)
             if old_checkpoint.exists():
                 old_checkpoint.unlink()
 
-    def load_checkpoint(self, model, optimizer=None, scheduler=None, filename=None, resume=False):
+    def load_checkpoint(self, model, optimizer=None, filename=None):
         """
         체크포인트 로드
 
         Args:
             model: PyTorch 모델
             optimizer: Optimizer (선택)
-            scheduler: Learning rate scheduler (선택)
-            filename (str): 로드할 파일명 (None이면 best 또는 latest)
-            resume (bool): True면 latest 체크포인트 로드 (이어서 학습용)
+            filename (str): 로드할 파일명 (None이면 best 모델)
 
         Returns:
-            dict: 체크포인트 정보 (epoch, metrics, 기타)
+            dict: 체크포인트 정보 (epoch, metrics)
         """
         if filename is None:
-            if resume:
-                # Resume 시 latest 체크포인트 로드
-                filename = f"{self.model_name}_latest.pt"
-            else:
-                # 평가 시 best 체크포인트 로드
-                filename = f"{self.model_name}_best.pt"
+            filename = f"{self.model_name}_best.pt"
 
         filepath = self.checkpoint_dir / filename
 
         if not filepath.exists():
             raise FileNotFoundError(f"Checkpoint not found: {filepath}")
 
-        checkpoint = torch.load(filepath, weights_only=False)
+        checkpoint = torch.load(filepath)
         model.load_state_dict(checkpoint['model_state_dict'])
 
         if optimizer is not None:
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
-        if scheduler is not None and 'scheduler_state_dict' in checkpoint:
-            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-
         print(f"Loaded checkpoint from {filepath}")
-
-        # 모든 체크포인트 정보 반환
-        info = {
+        return {
             'epoch': checkpoint['epoch'],
             'metrics': checkpoint['metrics']
         }
-
-        # 추가 정보 반환 (있는 경우)
-        for key in checkpoint:
-            if key not in ['model_state_dict', 'optimizer_state_dict', 'scheduler_state_dict', 'epoch', 'metrics']:
-                info[key] = checkpoint[key]
-
-        return info
 
 
 def set_seed(seed=42):

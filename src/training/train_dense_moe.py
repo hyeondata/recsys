@@ -201,10 +201,35 @@ def main(args):
         max_keep=3
     )
 
-    # 학습 루프
+    # Resume 기능
+    start_epoch = 1
     best_val_loss = float('inf')
 
-    for epoch in range(1, args.epochs + 1):
+    if args.resume:
+        try:
+            checkpoint_info = checkpoint_manager.load_checkpoint(
+                model=model,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                resume=True
+            )
+            start_epoch = checkpoint_info['epoch'] + 1
+            best_val_loss = checkpoint_info['metrics'].get('loss', float('inf'))
+
+            # Early stopping state 복원
+            if 'early_stopping_state' in checkpoint_info:
+                early_stopping.load_state_dict(checkpoint_info['early_stopping_state'])
+
+            print(f"\n{'='*50}")
+            print(f"Resumed from epoch {checkpoint_info['epoch']}")
+            print(f"Best validation loss: {best_val_loss:.4f}")
+            print(f"{'='*50}\n")
+        except FileNotFoundError as e:
+            print(f"Warning: {e}")
+            print("Starting training from scratch...")
+
+    # 학습 루프
+    for epoch in range(start_epoch, args.epochs + 1):
         print(f"\n{'='*50}")
         print(f"Epoch {epoch}/{args.epochs}")
         print(f"{'='*50}")
@@ -226,7 +251,14 @@ def main(args):
             best_val_loss = val_metrics['loss']
 
         checkpoint_manager.save_checkpoint(
-            model, optimizer, epoch, val_metrics, is_best=is_best
+            model=model,
+            optimizer=optimizer,
+            epoch=epoch,
+            metrics=val_metrics,
+            is_best=is_best,
+            scheduler=scheduler,
+            early_stopping_state=early_stopping.state_dict(),
+            best_val_loss=best_val_loss
         )
 
         # Early stopping
@@ -266,6 +298,7 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--num_workers", type=int, default=4, help="Number of workers")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints", help="Checkpoint directory")
+    parser.add_argument("--resume", action="store_true", help="Resume training from latest checkpoint")
 
     args = parser.parse_args()
     main(args)
