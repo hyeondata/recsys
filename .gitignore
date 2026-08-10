@@ -136,6 +136,15 @@ ENV/
 env.bak/
 venv.bak/
 
+# Local datasets, model artifacts, and private work
+data/
+artifacts/
+checkpoints/
+private/
+*.pt
+*.pth
+*.ckpt
+
 # Spyder project settings
 .spyderproject
 .spyproject

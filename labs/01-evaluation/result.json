@@ -1,0 +1,23 @@
+{
+  "dataset": "MovieLens 1M",
+  "split": {
+    "strategy": "per-user temporal leave-two-out",
+    "min_interactions": 5,
+    "test_history": "train + validation interactions",
+    "candidates": "full observed catalog excluding user history"
+  },
+  "seed": 42,
+  "model": "popularity",
+  "params": {
+    "k": 10
+  },
+  "metrics": {
+    "precision@10": 0.003642384105960272,
+    "recall@10": 0.03642384105960265,
+    "mrr@10": 0.012350927677914444,
+    "map@10": 0.012350927677914444,
+    "ndcg@10": 0.017862854911901205,
+    "catalog_coverage@10": 0.05372570194384449
+  },
+  "elapsed_seconds": 1.041657
+}
